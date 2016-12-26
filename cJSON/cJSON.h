@@ -40,7 +40,9 @@ extern "C"
 #define cJSON_IsReference 256
 #define cJSON_StringIsConst 512
 
-/*JSON的数组和对象是嵌套类型,我们将JSON的数组(或对象)与其元素的关系看作是树结构中的父子关系
+/* 这个结构定义了JSON的元素类型，
+   由于JSON的数组和对象是嵌套类型,将JSON的数组(或对象)与其元素的关系看作是树结构中的父子关系
+   通过next,prev,child组成树形结构。如[{x:{...}, y:{y1:{..}, y2:yy2}}, string, [..], 5]
 /* The cJSON structure: */
 typedef struct cJSON {
 	struct cJSON *next,*prev;	/* next/prev构成它的兄弟姐妹的双向链表。Alternatively, use GetArraySize/GetArrayItem/GetObjectItem */

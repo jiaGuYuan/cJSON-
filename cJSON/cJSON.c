@@ -50,6 +50,7 @@ static int cJSON_strcasecmp(const char *s1,const char *s2)
 static void *(*cJSON_malloc)(size_t sz) = malloc;
 static void (*cJSON_free)(void *ptr) = free;
 
+//字符串复制,返回副本的指针
 static char* cJSON_strdup(const char* str)
 {
     size_t len;
@@ -81,7 +82,7 @@ static cJSON *cJSON_New_Item(void)
     return node;
 }
 
-/*释放cJSON的内存空间
+/*递归的释放cJSON的内存空间
   将JSON文本进行解析所生成的cJSON结构的空间是malloc的方式分配的，如果用完不及时释放会造成内存泄露 
   由于cJSON对象是树型嵌套结构,对它的释放通过该函数实现. */
 void cJSON_Delete(cJSON *c)
@@ -185,6 +186,7 @@ static char* ensure(printbuffer *p,int needed)
     return newbuffer+p->offset;
 }
 
+//获取p的当前使用buffer的大小(用于更新offset)
 static int update(printbuffer *p)
 {
     char *str;
@@ -489,12 +491,6 @@ cJSON *cJSON_ParseWithOpts(const char *value,const char **return_parse_end,int r
 
 
 
-
-
-
-
-
-
 /*解析JSON数据包,按照cJSON结构体的结构序列化传入的据包
 　参数:value:要序列化为CJSON的数据
   返回值:成功:返回一个cJSON指针
@@ -575,10 +571,10 @@ static const char *parse_value(cJSON *item,const char *value)
 
 
 
-/* 将结构化的cJSON转换成为文本格式的JSON。
+/* 将结构化的cJSON转换成为文本格式的JSON。(格式化输出和非格式化输出)
    参数:　item:要转换的cJSON(实际上是要转换的cJSON树的根节点)
-          depth:
-          fmt:
+          depth: 在指定格式化输出时在左侧填充的空格数 
+          fmt: 是否设置输出的格式(缩进),非0表示有格式的输出,0无格式的输出
           p: JSON的文本格式描述的存储位置,为NULL时空间在内部分配
    返回值:存放转换结果的首地址,失败－返回0*/
 static char *print_value(cJSON *item,int depth,int fmt,printbuffer *p)
@@ -683,10 +679,11 @@ static const char *parse_array(cJSON *item,const char *value)
 
 /*  将类型为array的结构化的cJSON转换为文本格式的JSON描述,并存储到适当位置. 
 　　参数:item:要转换为JSON文本格式的cJSON对象指针
-         depth:
-         fmt:
+         depth: 在指定格式化输出时在左侧填充的空格数 
+         fmt: 是否设置输出的格式(缩进),非0表示有格式的输出,0无格式的输出
          P:将转换后的内容写入p的适当位置，为NULL时在内部分配空间
     返回:存放转换结果的首地址*/
+    
 static char *print_array(cJSON *item,int depth,int fmt,printbuffer *p)
 {
     char **entries;
@@ -696,7 +693,7 @@ static char *print_array(cJSON *item,int depth,int fmt,printbuffer *p)
     int numentries=0,i=0,fail=0;
     size_t tmplen=0;
 
-    /* 计算cJSON的数组类型对象有多少个孩子 */
+    /* 计算cJSON的数组类型对象有多少个元素(孩子) */
     while (child) numentries++,child=child->next;
     /* 当cJSON的数组类型对象没有孩子时 */
     if (!numentries) {
@@ -706,6 +703,8 @@ static char *print_array(cJSON *item,int depth,int fmt,printbuffer *p)
         return out;
     }
 
+	/* 有孩子 */
+	//指定转换结果的存储位置
     if (p) {
         /* 构成输出的JSON数组类型. */
         i=p->offset;
@@ -715,10 +714,11 @@ static char *print_array(cJSON *item,int depth,int fmt,printbuffer *p)
         p->offset++;
         child=item->child;
         while (child && !fail) {
-            print_value(child,depth+1,fmt,p);
+            print_value(child,depth+1,fmt,p);//递归的处理JSON元素
             p->offset=update(p);
+			//当指定以格式化方式转换时JSON数组元素之间的逗号分隔符后面加一个空格 [x, y],不格式化时[x,y]
             if (child->next) {
-                len=fmt?2:1;
+                len=fmt?2:1; 
                 ptr=ensure(p,len+1);
                 if (!ptr) return 0;
                 *ptr++=',';
@@ -733,8 +733,10 @@ static char *print_array(cJSON *item,int depth,int fmt,printbuffer *p)
         *ptr++=']';
         *ptr=0;
         out=(p->buffer)+i;
-    } else {
-        /* Allocate an array to hold the values for each */
+    } else {//没有指定转换结果的存储位置时,需要内部分配
+
+		/* 分配一个空间存放指向JSON数组元素转换结果的地址(其元素的空间在print_value()中分配)
+		  通过它将JSON数组元素转换结果复制到一个连续的空间中*/
         entries=(char**)cJSON_malloc(numentries*sizeof(char*));
         if (!entries) return 0;
         memset(entries,0,numentries*sizeof(char*));
@@ -744,7 +746,7 @@ static char *print_array(cJSON *item,int depth,int fmt,printbuffer *p)
             ret=print_value(child,depth+1,fmt,0);
             entries[i++]=ret;
             if (ret) len+=strlen(ret)+2+(fmt?1:0);
-            else fail=1;
+            else fail=1;//失败
             child=child->next;
         }
 
@@ -837,7 +839,12 @@ static const char *parse_object(cJSON *item,const char *value)
     return 0;	/* malformed. */
 }
 
-/* Render an object to text. */
+/*  将类型为object的结构化的cJSON转换为文本格式的JSON描述,并存储到适当位置. 
+　　参数:item:要转换为JSON文本格式的cJSON对象指针
+         depth: 在指定格式化输出时在左侧填充的空格数 
+         fmt: 是否设置输出的格式(缩进),非0表示有格式的输出,0无格式的输出
+         P:将转换后的内容写入p的适当位置，为NULL时在内部分配空间
+    返回:存放转换结果的首地址*/
 static char *print_object(cJSON *item,int depth,int fmt,printbuffer *p)
 {
     char **entries=0,**names=0;
@@ -846,9 +853,9 @@ static char *print_object(cJSON *item,int depth,int fmt,printbuffer *p)
     cJSON *child=item->child;
     int numentries=0,fail=0;
     size_t tmplen=0;
-    /* Count the number of entries. */
+    /* 计算cJSON的object类型对象有多少个元素(孩子) */
     while (child) numentries++,child=child->next;
-    /* Explicitly handle empty object case */
+    /* 当cJSON的object类型对象没有孩子时 */
     if (!numentries) {
         if (p) out=ensure(p,fmt?depth+4:3);
         else	out=(char*)cJSON_malloc(fmt?depth+4:3);
@@ -863,6 +870,8 @@ static char *print_object(cJSON *item,int depth,int fmt,printbuffer *p)
         *ptr++=0;
         return out;
     }
+
+	/* cJSON的object类型对象有元素时 */
     if (p) {
         /* Compose the output: */
         i=p->offset;
@@ -1006,13 +1015,13 @@ cJSON *cJSON_GetObjectItem(cJSON *object,const char *string)
 }
 
 
-/* Utility for array list handling. */
+/* Utility for array list handling.  将prev与item组成链*/
 static void suffix_object(cJSON *prev,cJSON *item)
 {
     prev->next=item;
     item->prev=prev;
 }
-/* Utility for handling references. */
+/* Utility for handling references. 创建一个引用,引用与被引用的对象共享资源,所以释放资源时要注意 */
 static cJSON *create_reference(cJSON *item)
 {
     cJSON *ref=cJSON_New_Item();
@@ -1024,18 +1033,24 @@ static cJSON *create_reference(cJSON *item)
     return ref;
 }
 
-/* Add item to array/object. */
+/* 在JSON的 array 中添加元素.－ 实际上向JSON的 Object 中添加元素也会调用这个函数
+(在cJSON中对JSON的array与Object的区别仅是类型不同,且Object的string字段非NULL)*/
 void   cJSON_AddItemToArray(cJSON *array, cJSON *item)
 {
     cJSON *c=array->child;
     if (!item) return;
-    if (!c) {
+    if (!c) {////JSON的该array中没有元素
         array->child=item;
-    } else {
+    } else {//JSON的该array中有元素(孩子)时,新加入的元素放到尾部
         while (c && c->next) c=c->next;
         suffix_object(c,item);
     }
 }
+
+/*在JOSN对象中添加一个元素, 因为是JSON对象的元素,所以其形式为key:value
+  参数:object:在这个JSON对象中添加
+  string: 对应添加元素的key
+  item: 对应添加元素的value  */
 void   cJSON_AddItemToObject(cJSON *object,const char *string,cJSON *item)
 {
     if (!item) return;
@@ -1043,6 +1058,7 @@ void   cJSON_AddItemToObject(cJSON *object,const char *string,cJSON *item)
     item->string=cJSON_strdup(string);
     cJSON_AddItemToArray(object,item);
 }
+
 void   cJSON_AddItemToObjectCS(cJSON *object,const char *string,cJSON *item)
 {
     if (!item) return;
@@ -1060,6 +1076,7 @@ void	cJSON_AddItemReferenceToObject(cJSON *object,const char *string,cJSON *item
     cJSON_AddItemToObject(object,string,create_reference(item));
 }
 
+//从JSON的数组中分离出第which个元素(从0算起)
 cJSON *cJSON_DetachItemFromArray(cJSON *array,int which)
 {
     cJSON *c=array->child;
@@ -1075,6 +1092,7 @@ void   cJSON_DeleteItemFromArray(cJSON *array,int which)
 {
     cJSON_Delete(cJSON_DetachItemFromArray(array,which));
 }
+//从JSON的对象中分离出名为string的元素
 cJSON *cJSON_DetachItemFromObject(cJSON *object,const char *string)
 {
     int i=0;
@@ -1088,7 +1106,7 @@ void   cJSON_DeleteItemFromObject(cJSON *object,const char *string)
     cJSON_Delete(cJSON_DetachItemFromObject(object,string));
 }
 
-/* Replace array/object items with new ones. */
+/* 在JSON的数组中的wihch位置插入一个新元素 */
 void   cJSON_InsertItemInArray(cJSON *array,int which,cJSON *newitem)
 {
     cJSON *c=array->child;
@@ -1103,6 +1121,7 @@ void   cJSON_InsertItemInArray(cJSON *array,int which,cJSON *newitem)
     if (c==array->child) array->child=newitem;
     else newitem->prev->next=newitem;
 }
+/* 用新元素替换JSON的数组中wihch位置的元素 */
 void   cJSON_ReplaceItemInArray(cJSON *array,int which,cJSON *newitem)
 {
     cJSON *c=array->child;
@@ -1113,9 +1132,11 @@ void   cJSON_ReplaceItemInArray(cJSON *array,int which,cJSON *newitem)
     if (newitem->next) newitem->next->prev=newitem;
     if (c==array->child) array->child=newitem;
     else newitem->prev->next=newitem;
+	
     c->next=c->prev=0;
     cJSON_Delete(c);
 }
+/* 用新元素替换JSON的对象中名为string的元素 */
 void   cJSON_ReplaceItemInObject(cJSON *object,const char *string,cJSON *newitem)
 {
     int i=0;
@@ -1127,7 +1148,7 @@ void   cJSON_ReplaceItemInObject(cJSON *object,const char *string,cJSON *newitem
     }
 }
 
-/* Create basic types: */
+/* 创建基本类型的JSON。。Create basic types: */
 cJSON *cJSON_CreateNull(void)
 {
     cJSON *item=cJSON_New_Item();
@@ -1183,8 +1204,6 @@ cJSON *cJSON_CreateObject(void)
     if(item)item->type=cJSON_Object;
     return item;
 }
-
-/* Create Arrays: */
 cJSON *cJSON_CreateIntArray(const int *numbers,int count)
 {
     int i;
@@ -1234,16 +1253,20 @@ cJSON *cJSON_CreateStringArray(const char **strings,int count)
     return a;
 }
 
-/* Duplication */
+/* 复制cJSON
+   参数: item: 要复制的cJSON
+         recurse:是否递归的复制. 非0表示递归的复制
+   返回值:cJSON的副本*/
 cJSON *cJSON_Duplicate(cJSON *item,int recurse)
 {
     cJSON *newitem,*cptr,*nptr=0,*newchild;
-    /* Bail on bad ptr */
+    /* 参数无效 */
     if (!item) return 0;
-    /* Create new item */
-    newitem=cJSON_New_Item();
+    
+    newitem=cJSON_New_Item(); // Create new item 
     if (!newitem) return 0;
-    /* Copy over all vars */
+
+	/* 复制所有的值*/
     newitem->type=item->type&(~cJSON_IsReference),newitem->valueint=item->valueint,newitem->valuedouble=item->valuedouble;
     if (item->valuestring)	{
         newitem->valuestring=cJSON_strdup(item->valuestring);
@@ -1259,9 +1282,10 @@ cJSON *cJSON_Duplicate(cJSON *item,int recurse)
             return 0;
         }
     }
-    /* If non-recursive, then we're done! */
+    /* 如果非递归,那么我们就完成了 */
     if (!recurse) return newitem;
-    /* Walk the ->next chain for the child. */
+
+	/* Walk the ->next chain for the child. */
     cptr=item->child;
     while (cptr) {
         newchild=cJSON_Duplicate(cptr,1);		/* Duplicate (with recurse) each item in the ->next chain */
@@ -1281,20 +1305,21 @@ cJSON *cJSON_Duplicate(cJSON *item,int recurse)
     return newitem;
 }
 
+//简缩JSON文本(去掉空白字符和注释)
 void cJSON_Minify(char *json)
 {
     char *into=json;
     while (*json) {
         if (*json==' ') json++;
-        else if (*json=='\t') json++;	/* Whitespace characters. */
+        else if (*json=='\t') json++;	/* 空白字符. */
         else if (*json=='\r') json++;
         else if (*json=='\n') json++;
-        else if (*json=='/' && json[1]=='/')  while (*json && *json!='\n') json++;	/* double-slash comments, to end of line. */
+        else if (*json=='/' && json[1]=='/')  while (*json && *json!='\n') json++;	/* 双斜杠注释,行结束. */
         else if (*json=='/' && json[1]=='*') {
-            while (*json && !(*json=='*' && json[1]=='/')) json++;    /* multiline comments. */
+            while (*json && !(*json=='*' && json[1]=='/')) json++;    /* 多行注释. */
             json+=2;
         } else if (*json=='\"') {
-            *into++=*json++;    /* string literals, which are \" sensitive. */
+            *into++=*json++;    /* 字符串字面值,\“敏感  */
             while (*json && *json!='\"') {
                 if (*json=='\\') *into++=*json++;
                 *into++=*json++;
