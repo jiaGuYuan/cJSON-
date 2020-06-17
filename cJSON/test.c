@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "cJSON.h"
 
-/* Parse text to JSON, then render back to text, and print! */
+/* 将文本解析为JSON，然后渲染回文本并打印! */
 void doit(char *text)
 {
     char *out;
@@ -151,8 +151,9 @@ int main (int argc, const char * argv[])
     doit(text5);
 
     /* Parse standard testfiles: */
+	//printf("\n\n\n");
     /*	dofile("../../tests/test1"); */
-    /*	dofile("../../tests/test2"); */
+    //dofile("D:/gitPro/cJSON-/cJSON/tests/test2"); 
     /*	dofile("../../tests/test3"); */
     /*	dofile("../../tests/test4"); */
     /*	dofile("../../tests/test5"); */

@@ -139,7 +139,7 @@ static const char *parse_number(cJSON *item,const char *num)
 //返回大于等于x的最小的2的N次方数
 static int pow2gt (int x)
 {
-    --x;　//先减1, 使得对x本就是2的N次方的情况的处理统一起来
+    --x;	//先减1, 使得对x本就是2的N次方的情况的处理统一起来
 	//使x的二进制中最高位的1不断向低位扩展,最终使得最高位为1的右边的所有位均被置1
 	//如:0001 xxxx xxxx xxxx(x表示0或１)->0001 1xxx xxxx xxxx ->0001 111x xxxx xxxx -> 0001 1111 111x xxxx ->...
     x|=x>>1; //将最位的1向低位扩展一次,使得高位出现两个连续的1
@@ -453,7 +453,7 @@ static const char *skip(const char *in)
 
 /* 解析对象,创建一个新的根并填充.
 　参数:value:要序列化为CJSON的字符串
-　　　 return_parse_end:[out]用于输出解析完成该cJSON时JSON字符串的结束位置(指针),为NULL表示不返回
+　　　 return_parse_end:[out]用于输出解析完成该cJSON时,JSON字符串的结束位置(指针),为NULL表示不返回
        require_null_terminated:JSON字符串是否需要以'\0'结束
   返回值:成功:返回一个cJSON指针
   　　　 失败:返回NULL,出错位置可由cJSON_GetErrorPtr()获取
@@ -491,7 +491,7 @@ cJSON *cJSON_ParseWithOpts(const char *value,const char **return_parse_end,int r
 
 
 
-/*解析JSON数据包,按照cJSON结构体的结构序列化传入的据包
+/*解析JSON数据包,按照cJSON结构体的结构序列化传入的数据包
 　参数:value:要序列化为CJSON的数据
   返回值:成功:返回一个cJSON指针
   　　　 失败:返回NULL,出错位置可由cJSON_GetErrorPtr()获取
@@ -535,7 +535,7 @@ char *cJSON_PrintBuffered(cJSON *item,int prebuffer,int fmt)
 
 
 
-/* 解析器的核心——当遇到文本,用适当的过程处理 */
+/* 解析器的核心——当遇到文本,用适当的过程处理.  --有的分支使用了间接递归来处理 */
 static const char *parse_value(cJSON *item,const char *value)
 {
     if (!value)						return 0;	/* Fail on null. */
